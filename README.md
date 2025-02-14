@@ -1,106 +1,183 @@
-<情人节礼物>
 import pygame
 import random
 import math
+from pygame.locals import *
 
-# 初始化Pygame
+# 初始化
 pygame.init()
+pygame.mixer.init()
 
-# 设置屏幕大小
-screen_width = 800
-screen_height = 600
-screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("刘宇航 ❤ 李爽")
+# 屏幕设置
+WIDTH, HEIGHT = 1920, 1080
+screen = pygame.display.set_mode((WIDTH, HEIGHT), FULLSCREEN)
+pygame.display.set_caption("刘宇航 ❤ 李爽 - 永恒的爱")
 
-# 定义颜色
+# 颜色定义
+PINK = (255, 182, 193)
+DARK_PINK = (255, 105, 180)
 WHITE = (255, 255, 255)
-PINK = (255, 192, 203)
-RED = (255, 0, 0)
+GOLD = (255, 215, 0)
 
-# 定义字体
-font = pygame.font.Font(None, 36)
+# 字体设置
+font_path = "simhei.ttf"  # 使用中文字体
+title_font = pygame.font.Font(font_path, 80)
+text_font = pygame.font.Font(font_path, 40)
 
-# 定义爱人名字
-your_name = "刘宇航"
-lover_name = "李爽"
+# 验证姓名
+def validate_names():
+    try:
+        with open("names.config", "r") as f:
+            names = f.read().split(",")
+            if names != ["刘宇航", "李爽"]:
+                print("姓名验证失败，程序无法运行。")
+                pygame.quit()
+                exit()
+    except:
+        print("配置文件缺失或错误，程序无法运行。")
+        pygame.quit()
+        exit()
 
-# 检查名字
-if your_name != "刘宇航" or lover_name != "李爽":
-    print("名字错误，程序无法运行。")
-    exit()
+validate_names()
 
-# 定义树的生长参数
-tree_growth = 0
-max_tree_growth = 100
+# 加载资源
+heart_img = pygame.image.load("heart.png").convert_alpha()
+bg_music = pygame.mixer.Sound("love.mp3")
 
-# 定义心的跳动参数
-hearts = []
+# 粒子系统（用于花瓣飘落）
+class Particle:
+    def __init__(self, pos):
+        self.pos = list(pos)
+        self.velocity = [random.uniform(-1, 1), random.uniform(1, 3)]
+        self.size = random.randint(5, 10)
+        self.timer = random.randint(50, 100)
+        self.color = random.choice([PINK, DARK_PINK, WHITE])
 
-# 定义相识日期
-meet_date = "2023年3月9号"
+    def update(self):
+        self.pos[0] += self.velocity[0]
+        self.pos[1] += self.velocity[1]
+        self.timer -= 1
+        return self.timer > 0
 
-# 绘制树
-def draw_tree(x, y, growth):
-    trunk_width = 10 + growth * 0.2
-    trunk_height = 50 + growth * 2
-    leaves_radius = 30 + growth * 1.5
+# 分形树（用于生成爱情树）
+class FractalTree:
+    def __init__(self):
+        self.growth_speed = 0
+        self.branches = []
+        self.flowers = []
+        self.angle = math.pi / 4
 
-    # 绘制树干
-    pygame.draw.rect(screen, (139, 69, 19), (x - trunk_width / 2, y - trunk_height, trunk_width, trunk_height))
+    def generate_branch(self, start, length, angle, depth):
+        if depth > 10 or length < 2:
+            return
+        end = (
+            start[0] + length * math.cos(angle),
+            start[1] - length * math.sin(angle)
+        )
+        self.branches.append((start, end, length))
+        self.generate_branch(end, length * 0.7, angle + self.angle, depth + 1)
+        self.generate_branch(end, length * 0.7, angle - self.angle, depth + 1)
 
-    # 绘制树叶
-    pygame.draw.circle(screen, PINK, (x, y - trunk_height - int(leaves_radius / 2)), leaves_radius)
+        # 在树枝末端生成花朵
+        if depth > 5 and random.random() < 0.3:
+            self.flowers.append(end)
 
-# 绘制心
-def draw_heart(x, y, size):
-    pygame.draw.polygon(screen, RED, [
-        (x, y - size),
-        (x - size, y),
-        (x, y + size),
-        (x + size, y)
-    ])
+# 心动动画（用于跳动的心形）
+class Heartbeat:
+    def __init__(self):
+        self.size = 1.0
+        self.growing = True
 
-# 主循环
-running = True
-clock = pygame.time.Clock()
-
-while running:
-    screen.fill(WHITE)
-
-    # 处理事件
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    # 绘制树
-    draw_tree(screen_width // 2, screen_height - 50, tree_growth)
-
-    # 树的生长
-    if tree_growth < max_tree_growth:
-        tree_growth += 0.1
-
-    # 绘制跳动的心
-    if random.random() < 0.1:
-        heart_x = random.randint(0, screen_width)
-        heart_y = random.randint(0, screen_height)
-        hearts.append((heart_x, heart_y, 0))
-
-    for i, (x, y, size) in enumerate(hearts):
-        if size < 20:
-            hearts[i] = (x, y, size + 0.5)
+    def update(self):
+        if self.growing:
+            self.size += 0.02
+            if self.size > 1.5:
+                self.growing = False
         else:
-            hearts.pop(i)
-        draw_heart(x, y, size)
+            self.size -= 0.02
+            if self.size < 1.0:
+                self.growing = True
+        return self.size
 
-    # 绘制文字
-    text = font.render(f"{your_name} ❤ {lover_name}", True, RED)
-    screen.blit(text, (screen_width // 2 - text.get_width() // 2, 50))
+# 主程序
+def main():
+    # 初始化变量
+    tree = FractalTree()
+    particles = []
+    hearts = []
+    start_time = pygame.time.get_ticks()
+    hb_effect = Heartbeat()
+    bg_music.play(loops=-1)
 
-    text = font.render(f"相识相知相爱至今: {meet_date}", True, RED)
-    screen.blit(text, (screen_width // 2 - text.get_width() // 2, 100))
+    # 主循环
+    running = True
+    while running:
+        screen.fill((25, 25, 50))  # 深空背景
 
-    # 更新屏幕
-    pygame.display.flip()
-    clock.tick(60)
+        # 事件处理
+        for event in pygame.event.get():
+            if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
+                running = False
 
-pygame.quit()
+        # 生成分形树
+        if tree.growth_speed < 1:
+            tree.growth_speed += 0.001
+            tree.angle = math.pi / 4 * tree.growth_speed
+            tree.branches = []
+            tree.generate_branch((WIDTH / 2, HEIGHT - 50), 150 * tree.growth_speed, math.pi / 2, 0)
+
+        # 绘制树
+        for branch in tree.branches:
+            width = max(1, branch[2] / 10)
+            pygame.draw.line(screen, (139, 69, 19), branch[0], branch[1], int(width))
+
+        # 绘制花朵
+        for pos in tree.flowers:
+            radius = random.randint(3, 6)
+            pygame.draw.circle(screen, PINK, pos, radius)
+
+        # 花瓣飘落
+        if random.random() < 0.3:
+            particles.append(Particle((random.randint(0, WIDTH), 0)))
+
+        # 更新粒子
+        particles = [p for p in particles if p.update()]
+        for p in particles:
+            pygame.draw.circle(screen, p.color, (int(p.pos[0]), int(p.pos[1])), p.size)
+
+        # 生成心动效果
+        if len(hearts) < 30:
+            hearts.append((
+                random.randint(0, WIDTH),
+                random.randint(0, HEIGHT),
+                random.randint(20, 40),
+                random.randint(0, 100)
+            ))
+
+        # 绘制动态心形
+        scale = hb_effect.update()
+        for i, (x, y, s, phase) in enumerate(hearts):
+            alpha = abs(math.sin((pygame.time.get_ticks() + phase) * 0.005)) * 255
+            scaled_size = int(s * (1 + 0.2 * math.sin(pygame.time.get_ticks() * 0.005)))
+            heart = pygame.transform.smoothscale(heart_img, (scaled_size, scaled_size))
+            heart.set_alpha(int(alpha))
+            screen.blit(heart, (x - scaled_size // 2, y - scaled_size // 2))
+
+        # 绘制文字信息
+        time_passed = (pygame.time.get_ticks() - start_time) // 1000
+        text = title_font.render(f"刘宇航 ❤ 李爽 - 相爱 {time_passed} 秒", True, GOLD)
+        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, 50))
+
+        date_text = text_font.render("2023年3月9日 命运相遇", True, WHITE)
+        screen.blit(date_text, (WIDTH // 2 - date_text.get_width() // 2, HEIGHT - 100))
+
+        # 绘制进度条
+        pygame.draw.rect(screen, (100, 100, 100), (WIDTH // 2 - 150, HEIGHT - 80, 300, 20))
+        pygame.draw.rect(screen, PINK, (WIDTH // 2 - 150, HEIGHT - 80, 300 * tree.growth_speed, 20))
+
+        pygame.display.flip()
+        pygame.time.delay(10)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
